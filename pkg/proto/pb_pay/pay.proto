@@ -1,0 +1,91 @@
+syntax ="proto3";
+package pb_pay;
+option go_package = "./pb_pay;pb_pay";
+
+message AlipayReturnReq {
+
+}
+
+message AlipayReturnResp {
+  int32 code = 1;
+  string msg = 2;
+}
+
+message AlipayNotifyReq {
+  string auth_app_id = 1;            // App Id
+  string notify_time = 2;            // 通知时间
+  string notify_type = 3;            // 通知类型
+  string notify_id = 4;              // 通知校验ID
+  string app_id = 5;                 // 开发者的app_id
+  string charset = 6;                // 编码格式
+  string version = 7;                // 接口版本
+  string sign_type = 8;              // 签名类型
+  string sign = 9;                   // 签名
+  string trade_no = 10;              // 支付宝交易号
+  string out_trade_no = 11;          // 商户订单号
+  string out_biz_no = 12;            // 商户业务号
+  string buyer_id = 13;              // 买家支付宝用户号
+  string buyer_logon_id = 14;        // 买家支付宝账号
+  string seller_id = 15;             // 卖家支付宝用户号
+  string seller_email = 16;          // 卖家支付宝账号
+  string trade_status = 17;          // 交易状态
+  string total_amount = 18;          // 订单金额
+  string receipt_amount = 19;        // 实收金额
+  string invoice_amount = 20;        // 开票金额
+  string buyer_pay_amount = 21;      // 付款金额
+  string point_amount = 22;          // 集分宝金额
+  string refund_fee = 23;            // 总退款金额
+  string subject = 24;               // 商品的标题/交易标题/订单标题/订单关键字等，是请求时对应的参数，原样通知回来。
+  string body = 25;                  // 商品描述
+  string gmt_create = 26;            // 交易创建时间
+  string gmt_payment = 27;           // 交易付款时间
+  string gmt_refund = 28;            // 交易退款时间
+  string gmt_close = 29;             // 交易结束时间
+  string fund_bill_list = 30;        // 支付金额信息
+  string passback_params = 31;       // 回传参数
+  string voucher_detail_list = 32;   // 优惠券信息
+  string agreement_no = 33;          // 支付宝签约号
+  string external_agreement_no = 34; // 商户自定义签约号
+}
+
+message AlipayNotifyResp {
+  int32 code = 1;
+  string msg = 2;
+}
+
+message PaypalReturnReq {
+  string payment_id = 1;
+  string payer_id = 2;
+}
+
+message PaypalReturnResp {
+  int32 code = 1;
+  string msg = 2;
+}
+
+message PaypalCancelReq {
+  string token = 1;
+}
+
+message PaypalCancelResp {
+  int32 code = 1;
+  string msg = 2;
+}
+
+message PaypalNotifyReq {
+
+}
+
+message PaypalNotifyResp {
+  int32 code = 1;
+  string msg = 2;
+}
+
+service Pay {
+  rpc AlipayReturn(AlipayReturnReq) returns(AlipayReturnResp);
+  rpc AlipayNotify(AlipayNotifyReq) returns(AlipayNotifyResp);
+
+  rpc PaypalReturn(PaypalReturnReq) returns(PaypalReturnResp);
+  rpc PaypalCancel(PaypalCancelReq) returns(PaypalCancelResp);
+  rpc PaypalNotify(PaypalNotifyReq) returns(PaypalNotifyResp);
+}

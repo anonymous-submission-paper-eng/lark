@@ -1,0 +1,132 @@
+name: lark_api_gateway
+server_id: 1
+port: 8088
+log: "./configs/logger.yaml"
+etcd:
+  endpoints: ["127.0.0.1:12379"]
+  username:
+  password:
+  schema: lark
+  read_timeout: 5000
+  write_timeout: 5000
+  dial_timeout: 5000
+redis:
+  address: ["127.0.0.1:63791"]
+  db: 0
+  password: lark2022
+  prefix: "LK:"
+auth_server:
+  name: lark_auth_server
+  cert:
+    cert_file: ./configs/tls/grpc/server.pem
+    enabled: true
+    server_name_override: lark.com
+user_server:
+  name: lark_user_server
+  cert:
+    cert_file: ./configs/tls/grpc/server.pem
+    enabled: true
+    server_name_override: lark.com
+chat_msg_server:
+  name: lark_chat_msg_server
+  cert:
+    cert_file: ./configs/tls/grpc/server.pem
+    enabled: true
+    server_name_override: lark.com
+message_server:
+  name: lark_message_server
+  cert:
+    cert_file: ./configs/tls/grpc/server.pem
+    enabled: true
+    server_name_override: lark.com
+link_server:
+  name: lark_link_server
+  cert:
+    cert_file: ./configs/tls/grpc/server.pem
+    enabled: true
+    server_name_override: lark.com
+chat_member_server:
+  name: lark_chat_member_server
+  cert:
+    cert_file: ./configs/tls/grpc/server.pem
+    enabled: true
+    server_name_override: lark.com
+chat_invite_server:
+  name: lark_chat_invite_server
+  cert:
+    cert_file: ./configs/tls/grpc/server.pem
+    enabled: true
+    server_name_override: lark.com
+avatar_server:
+  name: lark_avatar_server
+  cert:
+    cert_file: ./configs/tls/grpc/server.pem
+    enabled: true
+    server_name_override: lark.com
+chat_server:
+  name: lark_chat_server
+  cert:
+    cert_file: ./configs/tls/grpc/server.pem
+    enabled: true
+    server_name_override: lark.com
+convo_server:
+  name: lark_convo_server
+  cert:
+    cert_file: ./configs/tls/grpc/server.pem
+    enabled: true
+    server_name_override: lark.com
+lbs_server:
+  name: lark_lbs_server
+  cert:
+    cert_file: ./configs/tls/grpc/server.pem
+    enabled: true
+    server_name_override: lark.com
+red_env_server:
+  name: lark_red_env_server
+  cert:
+    cert_file: ./configs/tls/grpc/server.pem
+    enabled: true
+    server_name_override: lark.com
+red_env_receive_server:
+  name: lark_red_env_receive_server
+  cert:
+    cert_file: ./configs/tls/grpc/server.pem
+    enabled: true
+    server_name_override: lark.com
+order_server:
+  name: lark_order_server
+  cert:
+    cert_file: ./configs/tls/grpc/server.pem
+    enabled: true
+    server_name_override: lark.com
+payment_server:
+  name: lark_payment_server
+  cert:
+    cert_file: ./configs/tls/grpc/server.pem
+    enabled: true
+    server_name_override: lark.com
+minio:
+  photo_directory: "/private/tmp/lark/photos/"
+jaeger:
+  host_port: "127.0.0.1:6831"
+  sampler_type: "const"
+  param: 1
+  log_spans: true
+  buffer_flush_interval: 1
+  max_packet_size: 0
+  enabled: false
+github_oauth2:
+  client_id: ""
+  client_secret: ""
+  redirect_url: "http://localhost:8088/open/auth/github/callback"
+  success_url: "http://localhost:8088/home?code=%s"
+  failed_url: "http://localhost:8088/login"
+google_oauth2:
+  client_id: ""
+  client_secret: ""
+  redirect_url: "http://localhost:8088/open/auth/google/callback"
+  scopes: ["https://www.googleapis.com/auth/userinfo.profile", "https://www.googleapis.com/auth/userinfo.email"]
+  auth_url: "https://accounts.google.com/o/oauth2/auth"
+  token_url: "https://accounts.google.com/o/oauth2/token"
+  success_url: "http://localhost:8088/home?code=%s"
+  failed_url: "http://localhost:8088/login"

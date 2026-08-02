@@ -1,0 +1,27 @@
+.DS_Store
+
+# Editors
+.idea/
+.vscode/
+
+# Logs and runtime state
+logs/
+runtime/
+*.log
+
+# Local build outputs
+build/
+.cache/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Go
+bin/
+*.test
+coverage.out
+
+# Environment files
+.env
+.env.*

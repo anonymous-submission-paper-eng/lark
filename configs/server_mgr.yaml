@@ -1,0 +1,22 @@
+name: lark_server_mgr
+server_id: 1
+log: "./configs/logger.yaml"
+etcd:
+  endpoints: ["127.0.0.1:12379"]
+  username:
+  password:
+  schema: lark
+  read_timeout: 5000
+  write_timeout: 5000
+  dial_timeout: 5000
+redis:
+  address: ["127.0.0.1:63791"]
+  db: 0
+  password: lark2022
+  prefix: "LK:"
+msg_gateway_server:
+  name: lark_msg_gateway_server
+  cert:
+    cert_file: ./configs/tls/grpc/server.pem
+    enabled: true
+    server_name_override: lark.com

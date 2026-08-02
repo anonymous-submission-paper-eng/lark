@@ -1,0 +1,27 @@
+name: lark_payment
+server_id: 1
+port: 80
+log: "./configs/logger.yaml"
+etcd:
+  endpoints: ["127.0.0.1:12379"]
+  username:
+  password:
+  schema: lark
+  read_timeout: 5000
+  write_timeout: 5000
+  dial_timeout: 5000
+mysql:
+  max_open_conns: 20
+  max_idle_conns: 10
+  max_lifetime: 120000
+  max_idle_time: 7200000
+  charset: utf8
+  address: "127.0.0.1:13306"
+  db: lark_user
+  username: root
+  password: lark2022
+redis:
+  address: ["127.0.0.1:63791"]
+  db: 0
+  password: lark2022
+  prefix: "LK:"

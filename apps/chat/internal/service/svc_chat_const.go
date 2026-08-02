@@ -1,0 +1,56 @@
+package service
+
+import "errors"
+
+var (
+	chatUpdateFields = map[string]string{"name": "name", "about": "about"}
+)
+
+var (
+	CONST_CHAT_INVITE_TITLE_CONJUNCTION = "邀请你加入"
+)
+
+const (
+	ERROR_CODE_CHAT_PROTOCOL_UNMARSHAL_ERR       int32 = 130001
+	ERROR_CODE_CHAT_PROTOCOL_MARSHAL_ERR         int32 = 130002
+	ERROR_CODE_CHAT_GRPC_SERVICE_FAILURE         int32 = 130003
+	ERROR_CODE_CHAT_INSERT_VALUE_FAILED          int32 = 130004
+	ERROR_CODE_CHAT_UPDATE_VALUE_FAILED          int32 = 130005
+	ERROR_CODE_CHAT_QUERY_DB_FAILED              int32 = 130006
+	ERROR_CODE_CHAT_INITIATOR_INVITEE_SAME       int32 = 130007
+	ERROR_CODE_CHAT_HAS_JOINED_CHAT              int32 = 130008
+	ERROR_CODE_CHAT_PARAM_ERR                    int32 = 130009
+	ERROR_CODE_CHAT_CACHE_CHAT_MEMBER_FAILED     int32 = 130010
+	ERROR_CODE_CHAT_NO_RIGHT_TO_MODIFY           int32 = 130011
+	ERROR_CODE_CHAT_WRONG_OPERATION              int32 = 130012
+	ERROR_CODE_CHAT_SET_AVATAR_FAILED            int32 = 130013
+	ERROR_CODE_CHAT_CACHE_GROUP_CHAT_INFO_FAILED int32 = 130014
+	ERROR_CODE_CHAT_REDIS_GET_FAILED             int32 = 130015
+	ERROR_CODE_CHAT_GET_SEQ_ID_FAILED            int32 = 130016
+	ERROR_CODE_CHAT_ENQUEUE_FAILED               int32 = 130017
+)
+
+const (
+	ERROR_CHAT_PROTOCOL_UNMARSHAL_ERR       = "协议反序列化错误"
+	ERROR_CHAT_PROTOCOL_MARSHAL_ERR         = "协议序列化错误"
+	ERROR_CHAT_GRPC_SERVICE_FAILURE         = "服务故障"
+	ERROR_CHAT_INSERT_VALUE_FAILED          = "数据入库失败"
+	ERROR_CHAT_UPDATE_VALUE_FAILED          = "更新Value失败"
+	ERROR_CHAT_QUERY_DB_FAILED              = "查询失败"
+	ERROR_CHAT_INITIATOR_INVITEE_SAME       = "发起者和被邀请人为同一人"
+	ERROR_CHAT_HAS_JOINED_CHAT              = "已经加入了"
+	ERROR_CHAT_PARAM_ERR                    = "参数错误"
+	ERROR_CHAT_CACHE_CHAT_MEMBER_FAILED     = "缓存Chat Member失败"
+	ERROR_CHAT_NO_RIGHT_TO_MODIFY           = "无权修改"
+	ERROR_CHAT_WRONG_OPERATION              = "错误的操作"
+	ERROR_CHAT_SET_AVATAR_FAILED            = "设置头像失败"
+	ERROR_CHAT_CACHE_GROUP_CHAT_INFO_FAILED = "缓存Group Chat Info失败"
+	ERROR_CHAT_REDIS_GET_FAILED             = "读取redis缓存失败"
+	ERROR_CHAT_GET_SEQ_ID_FAILED            = "生成 Sequence ID 失败"
+	ERROR_CHAT_ENQUEUE_FAILED               = "消息入队失败"
+)
+
+var (
+	ERR_CHAT_UPDATE_VALUE_FAILED = errors.New("更新Value失败")
+	ERR_CHAT_REQ_PARAM_ERR       = errors.New("请求参数错误")
+)

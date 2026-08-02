@@ -1,0 +1,30 @@
+name: lark_msg_hot_server
+server_id: 1
+log: "./configs/logger.yaml"
+etcd:
+  endpoints: ["127.0.0.1:12379"]
+  username:
+  password:
+  schema: lark
+  read_timeout: 5000
+  write_timeout: 5000
+  dial_timeout: 5000
+mongo:
+  hosts: ["lark-mongo-msg1:27017","lark-mongo-msg2:27018","lark-mongo-msg3:27019"]
+  username: admin
+  password: lark2022
+  replica_set: lark
+  db: lark
+  direct: false
+  timeout: 5000
+  max_pool_size: 20
+  retain_chat_records: 3650
+redis:
+  address: ["127.0.0.1:63791"]
+  db: 0
+  password: lark2022
+  prefix: "LK:"
+msg_consumer:
+  address: ["127.0.0.1:9092"]
+  topic: ["to_inbox"]
+  group_id: mongo

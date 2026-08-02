@@ -1,0 +1,106 @@
+name: lark_test
+server_id: 1
+log: "./configs/logger.yaml"
+grpc_server:
+  name: lark_test
+  server_id: 1
+  port: 19999
+  max_connection_idle: 0
+  max_connection_age: 0
+  max_connection_age_grace: 0
+  time: 7200000
+  timeout: 20000
+  connection_limit: 2000
+  streams_limit: 2000
+  max_recv_msg_size: 4096
+  credential:
+    cert_file: ./configs/tls/grpc/server.pem
+    key_file: ./configs/tls/grpc/server.key
+  jaeger:
+    host_port: "127.0.0.1:6831"
+    sampler_type: "const"
+    param: 1
+    log_spans: true
+    buffer_flush_interval: 1
+    max_packet_size: 0
+msg_gateway_server:
+  name: lark_msg_gateway_server
+  cert:
+    cert_file: ./configs/tls/grpc/server.pem
+    enabled: true
+    server_name_override: lark.com
+chat_member_server:
+  name: lark_chat_member_server
+  cert:
+    cert_file: ./configs/tls/grpc/server.pem
+    enabled: true
+    server_name_override: lark.com
+etcd:
+  endpoints: ["127.0.0.1:12379"]
+  username:
+  password:
+  schema: lark
+  read_timeout: 5000
+  write_timeout: 5000
+  dial_timeout: 5000
+mysql:
+  max_open_conns: 20
+  max_idle_conns: 10
+  max_lifetime: 120000
+  max_idle_time: 7200000
+  charset: utf8
+  address: "127.0.0.1:13306"
+  db: lark_user
+  username: root
+  password: lark2022
+  log_level: 2
+pg:
+  host: "127.0.0.1"
+  port: 5432
+  user: postgres
+  password: lark2022
+  dbname: canary
+  sslmode: disable
+  max_open_conns: 20
+  max_idle_conns: 10
+  conn_lifetime: 120000
+  charset: utf8
+  log_level: 2
+mongo:
+  address: "lark-mongo-msg:27017"
+  username: admin
+  password: lark2022
+  db: lark
+  direct: false
+  timeout: 5000
+  max_pool_size: 20
+  retain_chat_records: 3650
+redis:
+  address: ["127.0.0.1:63791"]
+  db: 0
+  password: lark2022
+  prefix: "LK:"
+platforms:
+ - type: 1
+   name: Android
+   offline_push: true
+ - type: 2
+   name: iOS
+   offline_push: true
+msg_consumer:
+  address: ["127.0.0.1:9092"]
+  topic: ["msg2inbox"]
+  group_id: dist
+elasticsearch:
+  address: ["http://lark-elasticsearch-01:9200","http://lark-elasticsearch-02:9201","http://lark-elasticsearch-03:9202"]
+  username: elastic
+  password: lark2022
+  ca_cert: ./configs/tls/elasticsearch/ca.crt
+rabbitmq:
+  address: ["127.0.0.1:5672"]
+  username: guest
+  password: guest
+  vhost: /
+  exchange: red_env_return_exchange
+  route_key: red_env_return_route
+  queue: red_env_return_queue

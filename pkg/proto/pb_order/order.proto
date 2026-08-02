@@ -1,0 +1,22 @@
+syntax ="proto3";
+import "pb_enum/enum.proto";
+package pb_order;
+option go_package = "./pb_order;pb_order";
+
+message CreateRedEnvelopeOrderReq {
+  int64 uid = 1; // 用户ID
+  int64 env_id = 2; // 红包ID
+  int64 amount = 3; // 红包金额(分)
+  pb_enum.PLATFORM_TYPE platform = 4; // 平台
+  pb_enum.PAY_TYPE pay_type = 5; // PayType
+}
+
+message CreateRedEnvelopeOrderResp {
+  int32 code = 1;
+  string msg = 2;
+  string pay_url = 3;
+}
+
+service Order {
+  rpc CreateRedEnvelopeOrder(CreateRedEnvelopeOrderReq) returns(CreateRedEnvelopeOrderResp);
+}
