@@ -1045,37 +1045,61 @@ function clearWsReconnectTimer() {
 }
 
 async function handlePush(data: unknown) {
-  const packet = decodePushHeader(data);
-  if (!packet) {
+  const packets = decodePushPackets(data);
+  if (!packets.length) {
     state.pushStatus = "收到推送";
     await refreshAll();
     return;
   }
-  state.pushStatus = pushLabel(packet.topic, packet.subtopic);
-  if (packet.topic === 1 && packet.subtopic === 1000) {
-    await Promise.all([loadConversations(), loadMessages()]);
-    return;
+  let refreshConversations = false;
+  let refreshMessages = false;
+  let refreshInvites = false;
+  let lastLabel = "收到推送";
+  for (const packet of packets) {
+    lastLabel = pushLabel(packet.topic, packet.subtopic);
+    if (packet.topic === 1 && packet.subtopic === 1000) {
+      refreshConversations = true;
+      refreshMessages = true;
+      continue;
+    }
+    if (packet.topic === 3 || packet.subtopic === 2000) {
+      refreshConversations = true;
+      refreshInvites = true;
+      continue;
+    }
+    if (packet.topic === 4 || packet.subtopic === 3000 || packet.subtopic === 3001) {
+      refreshConversations = true;
+      refreshMessages = true;
+      continue;
+    }
+    refreshConversations = true;
   }
-  if (packet.topic === 3 || packet.subtopic === 2000) {
-    await Promise.all([loadInvites(), loadConversations()]);
-    return;
-  }
-  if (packet.topic === 4 || packet.subtopic === 3000 || packet.subtopic === 3001) {
-    await Promise.all([loadConversations(), loadMessages()]);
-    return;
-  }
-  await loadConversations();
+  state.pushStatus = lastLabel;
+  const tasks: Promise<unknown>[] = [];
+  if (refreshConversations) tasks.push(loadConversations());
+  if (refreshMessages) tasks.push(loadMessages());
+  if (refreshInvites) tasks.push(loadInvites());
+  await Promise.all(tasks.length ? tasks : [loadConversations()]);
 }
 
-function decodePushHeader(data: unknown) {
-  if (!(data instanceof ArrayBuffer) || data.byteLength < 16) return null;
+function decodePushPackets(data: unknown) {
+  if (!(data instanceof ArrayBuffer) || data.byteLength < 16) return [];
   const view = new DataView(data);
-  return {
-    length: view.getInt32(0, true),
-    topic: view.getInt32(4, true),
-    subtopic: view.getInt32(8, true),
-    msgType: view.getInt32(12, true)
-  };
+  const packets = [] as Array<{ length: number; topic: number; subtopic: number; msgType: number }>;
+  let offset = 0;
+  while (offset + 16 <= view.byteLength) {
+    const length = view.getInt32(offset, true);
+    const total = 16 + length;
+    if (length < 0 || offset + total > view.byteLength) break;
+    packets.push({
+      length,
+      topic: view.getInt32(offset + 4, true),
+      subtopic: view.getInt32(offset + 8, true),
+      msgType: view.getInt32(offset + 12, true)
+    });
+    offset += total;
+  }
+  return packets;
 }
 
 function pushLabel(topic: number, subtopic: number) {
