@@ -39,6 +39,7 @@ type Conversation = {
   title?: string;
   avatar?: string;
   chat_type?: number;
+  peer_uid?: Id;
 };
 
 type Contact = {
@@ -123,7 +124,8 @@ const storageKeys = {
   token: "lark.jwt",
   refreshToken: "lark.refresh_token",
   user: "lark.user",
-  currentChat: "lark.current_chat"
+  currentChat: "lark.current_chat",
+  localReadSeq: "lark.local_read_seq"
 };
 
 const WS_RECONNECT_BASE_MS = 1000;
@@ -151,6 +153,7 @@ const state = {
   redResult: "",
   pushStatus: "未连接",
   currentChat: readJson<Conversation>(storageKeys.currentChat),
+  localReadSeqByChatId: readJson<Record<string, number>>(storageKeys.localReadSeq) || {},
   drawer: null as Drawer,
   notice: "",
   error: "",
@@ -198,6 +201,7 @@ function clearToken() {
   localStorage.removeItem(storageKeys.refreshToken);
   localStorage.removeItem(storageKeys.user);
   localStorage.removeItem(storageKeys.currentChat);
+  localStorage.removeItem(storageKeys.localReadSeq);
   document.cookie = "jwt=; Max-Age=0; path=/";
 }
 
@@ -326,6 +330,11 @@ function sameId(a?: Id | null, b?: Id | null) {
   return idText(a) === idText(b);
 }
 
+function numberValue(value?: Id | number | null) {
+  const parsed = Number(value || 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function currentUserId() {
   return idText(state.user?.uid);
 }
@@ -378,7 +387,8 @@ async function loadConversations() {
     `/api/convo/chat_seq_list${query({ last_cid: 0, last_ts: Math.floor(Date.now() / 1000) + 60, limit: 50 })}`
   );
   if (res.code !== 0) return setError(res.msg || "会话加载失败");
-  state.conversations = await Promise.all(normalizeArray(res.data).map(enrichConversation));
+  const conversations = await Promise.all(normalizeArray(res.data).map(enrichConversation));
+  state.conversations = dedupeConversations(conversations);
   if (state.currentChat) {
     const latest = state.conversations.find((item) => sameId(item.chat_id, state.currentChat?.chat_id));
     if (latest) state.currentChat = { ...state.currentChat, ...latest };
@@ -389,7 +399,7 @@ async function loadConversations() {
 async function loadContacts() {
   const res = await api<Contact[]>(`/api/chat_member/contact_list${query({ limit: 50, last_chat_id: 0 })}`);
   if (res.code === 0) {
-    state.contacts = normalizeArray(res.data);
+    state.contacts = dedupeByKey(normalizeArray(res.data), (item) => idText(item.uid));
     await ensureUsersByIds(state.contacts.map((item) => item.uid));
   }
 }
@@ -404,13 +414,63 @@ async function loadInvites() {
     api<Invite[]>(`/api/chat_invite/list${query({ role: 2, max_invite_id: 0, handle_result: 0, limit: 20 })}`),
     api<Invite[]>(`/api/chat_invite/list${query({ role: 1, max_invite_id: 0, limit: 20 })}`)
   ]);
-  if (incoming.code === 0) state.invites = normalizeArray(incoming.data);
-  if (outgoing.code === 0) state.outgoingInvites = normalizeArray(outgoing.data);
+  if (incoming.code === 0) state.invites = dedupeInvites(normalizeArray(incoming.data), "incoming");
+  if (outgoing.code === 0) state.outgoingInvites = dedupeInvites(normalizeArray(outgoing.data), "outgoing");
   await ensureUsersByIds([...state.invites, ...state.outgoingInvites].flatMap((item) => [item.initiator_uid, item.invitee_uid]));
 }
 
 function normalizeArray<T>(value: T[] | undefined): T[] {
   return Array.isArray(value) ? value : [];
+}
+
+function dedupeByKey<T>(items: T[], keyFor: (item: T) => string) {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = keyFor(item);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function dedupeConversations(items: Conversation[]) {
+  const byKey = new Map<string, Conversation>();
+  items.forEach((item) => {
+    const key = conversationDedupeKey(item);
+    const existing = byKey.get(key);
+    if (!existing || conversationSortValue(item) > conversationSortValue(existing)) {
+      byKey.set(key, item);
+    }
+  });
+  return Array.from(byKey.values()).sort((a, b) => conversationSortValue(b) - conversationSortValue(a));
+}
+
+function conversationDedupeKey(item: Conversation) {
+  if (item.chat_type === 2) return `group:${idText(item.chat_id)}`;
+  if (item.peer_uid) return `peer:${idText(item.peer_uid)}`;
+  return `chat:${idText(item.chat_id)}`;
+}
+
+function conversationSortValue(item: Conversation) {
+  return numberValue(item.srv_ts) || numberValue(item.seq_id);
+}
+
+function dedupeInvites(items: Invite[], role: "incoming" | "outgoing") {
+  const byKey = new Map<string, Invite>();
+  items.forEach((item) => {
+    const key = inviteDedupeKey(item, role);
+    const existing = byKey.get(key);
+    if (!existing || numberValue(item.invite_id) > numberValue(existing.invite_id)) {
+      byKey.set(key, item);
+    }
+  });
+  return Array.from(byKey.values()).sort((a, b) => numberValue(b.invite_id) - numberValue(a.invite_id));
+}
+
+function inviteDedupeKey(item: Invite, role: "incoming" | "outgoing") {
+  const peerUid = role === "incoming" ? item.initiator_uid : item.invitee_uid;
+  const chatKey = item.chat_type === 2 ? idText(item.chat_id) : "direct";
+  return `${item.chat_type || 1}:${chatKey}:${idText(peerUid)}`;
 }
 
 function listFrom<T>(value: any): T[] {
@@ -439,6 +499,7 @@ async function enrichConversation(item: Conversation): Promise<Conversation> {
   return {
     ...item,
     chat_type: 1,
+    peer_uid: other.uid,
     title: displayUserName(other.uid, other.alias || "好友"),
     avatar: other.member_avatar || item.avatar
   };
@@ -476,6 +537,44 @@ function displayUserSubtitle(uid?: Id | null) {
   return "Lark 用户";
 }
 
+function localReadSeq(chatId?: Id | null) {
+  return state.localReadSeqByChatId[idText(chatId)] || 0;
+}
+
+function saveLocalReadSeq() {
+  saveJson(storageKeys.localReadSeq, state.localReadSeqByChatId);
+}
+
+function markChatRead(chatId?: Id | null, seq?: number) {
+  const key = idText(chatId);
+  if (!key) return;
+  const readSeq = Math.max(localReadSeq(key), numberValue(seq));
+  state.localReadSeqByChatId[key] = readSeq;
+  state.conversations = state.conversations.map((item) =>
+    sameId(item.chat_id, key) ? { ...item, read_seq: Math.max(numberValue(item.read_seq), readSeq) } : item
+  );
+  if (state.currentChat && sameId(state.currentChat.chat_id, key)) {
+    state.currentChat = { ...state.currentChat, read_seq: Math.max(numberValue(state.currentChat.read_seq), readSeq) };
+    saveJson(storageKeys.currentChat, state.currentChat);
+  }
+  saveLocalReadSeq();
+}
+
+function conversationUnread(item: Conversation) {
+  if (sameId(item.chat_id, state.currentChat?.chat_id)) return 0;
+  const readSeq = Math.max(numberValue(item.read_seq), localReadSeq(item.chat_id));
+  return Math.max(0, numberValue(item.seq_id) - readSeq);
+}
+
+function totalUnread() {
+  return state.conversations.reduce((sum, item) => sum + conversationUnread(item), 0);
+}
+
+function badgeCount(count: number) {
+  if (count <= 0) return "";
+  return count > 99 ? "99+" : String(count);
+}
+
 async function getMembersForChat(chatId: Id, force = false) {
   const key = idText(chatId);
   if (!force && state.chatMembersById[key]) return state.chatMembersById[key];
@@ -489,6 +588,7 @@ async function getMembersForChat(chatId: Id, force = false) {
 
 async function selectConversation(convo: Conversation, shouldRender = true) {
   state.currentChat = { ...convo, title: convo.title || labelForChat(convo.chat_id) };
+  markChatRead(convo.chat_id, convo.seq_id);
   state.drawer = null;
   state.members = [];
   state.messageResults = [];
@@ -549,6 +649,7 @@ async function loadMessages() {
   if (res.code === 0) {
     const payload = res.data as any;
     state.messages = normalizeArray(payload?.list || payload?.msgs?.list);
+    markChatRead(state.currentChat.chat_id, state.currentChat.seq_id);
     render();
   }
 }
@@ -685,6 +786,7 @@ async function signOut() {
   state.outgoingInvites = [];
   state.members = [];
   state.chatMembersById = {};
+  state.localReadSeqByChatId = {};
   state.usersById = {};
   state.userResults = [];
   state.userList = [];
@@ -719,6 +821,8 @@ async function inviteUser(chatType = 1, uids?: Id[]) {
   if (!invitee.length) return setError(chatType === 1 ? "请选择或输入要添加的用户" : "请输入要邀请的成员");
   const chatId = chatType === 1 ? 0 : state.currentChat?.chat_id || 0;
   if (chatType === 2 && !currentChatIsGroup()) return setError("请先打开一个群聊");
+  const blockedReason = await firstInviteBlockReason(invitee, chatType, chatId);
+  if (blockedReason) return setError(blockedReason);
   const res = await api("/api/chat_invite/initiate", {
     method: "POST",
     body: jsonBody({
@@ -731,6 +835,36 @@ async function inviteUser(chatType = 1, uids?: Id[]) {
   if (res.code !== 0) return setError(res.msg || "邀请失败");
   setNotice(chatType === 1 ? "好友申请已发送，等待对方同意" : "入群邀请已发送，等待对方同意");
   await loadInvites();
+}
+
+async function firstInviteBlockReason(invitee: Id[], chatType: number, chatId: Id) {
+  if (chatType === 1) {
+    const contact = invitee.find((uid) => state.contacts.some((item) => sameId(item.uid, uid)));
+    if (contact) return `${displayUserName(contact, "对方")} 已经是联系人，无需重复申请`;
+    const incoming = invitee.find((uid) =>
+      state.invites.some((item) => item.chat_type !== 2 && isInvitePending(item) && sameId(item.initiator_uid, uid))
+    );
+    if (incoming) return `${displayUserName(incoming, "对方")} 已经发来申请，请先到邀请里同意或拒绝`;
+  }
+  if (chatType === 2) {
+    const members = await getMembersForChat(chatId);
+    const member = invitee.find((uid) => members.some((item) => sameId(item.uid, uid)));
+    if (member) return `${displayUserName(member, "对方")} 已经在当前群聊里`;
+  }
+  const pending = invitee.find((uid) => hasPendingOutgoingInvite(uid, chatType, chatId));
+  if (pending) return `已向 ${displayUserName(pending, "对方")} 发送过待处理邀请，请等待处理`;
+  return "";
+}
+
+function hasPendingOutgoingInvite(uid: Id, chatType: number, chatId: Id) {
+  return state.outgoingInvites.some((item) => {
+    const sameChat = chatType === 1 || sameId(item.chat_id, chatId);
+    return item.chat_type === chatType && sameChat && sameId(item.invitee_uid, uid) && isInvitePending(item);
+  });
+}
+
+function isInvitePending(item: Invite) {
+  return numberValue(item.handle_result) === 0;
 }
 
 async function inviteCurrentGroup() {
@@ -868,11 +1002,19 @@ async function deleteContact() {
 }
 
 async function handleInvite(inviteId: Id, result: 1 | 2) {
+  const previous = state.invites;
+  state.invites = state.invites.map((item) =>
+    sameId(item.invite_id, inviteId) ? { ...item, handle_result: result, handle_msg: result === 1 ? "同意" : "拒绝" } : item
+  );
+  render();
   const res = await api("/api/chat_invite/handle", {
     method: "POST",
     body: jsonBody({ invite_id: inviteId, handle_result: result, handle_msg: result === 1 ? "同意" : "拒绝" })
   });
-  if (res.code !== 0) return setError(res.msg || "处理失败");
+  if (res.code !== 0) {
+    state.invites = previous;
+    return setError(res.msg || "处理失败");
+  }
   setNotice("邀请已处理");
   await Promise.all([loadInvites(), loadContacts(), loadGroups(), loadConversations()]);
 }
@@ -1075,11 +1217,18 @@ async function handlePush(data: unknown) {
     refreshConversations = true;
   }
   state.pushStatus = lastLabel;
-  const tasks: Promise<unknown>[] = [];
-  if (refreshConversations) tasks.push(loadConversations());
-  if (refreshMessages) tasks.push(loadMessages());
-  if (refreshInvites) tasks.push(loadInvites());
-  await Promise.all(tasks.length ? tasks : [loadConversations()]);
+  if (refreshConversations) {
+    await loadConversations();
+  }
+  if (refreshMessages) {
+    await loadMessages();
+  }
+  if (refreshInvites) {
+    await loadInvites();
+  }
+  if (!refreshConversations && !refreshMessages && !refreshInvites) {
+    await loadConversations();
+  }
 }
 
 function decodePushPackets(data: unknown) {
@@ -1209,10 +1358,10 @@ function renderApp() {
           <strong>Lark</strong>
         </div>
         <nav>
-          ${navButton("conversations", "消息", state.conversations.length)}
+          ${navButton("conversations", "消息", totalUnread())}
           ${navButton("contacts", "通讯录", state.contacts.length)}
           ${navButton("groups", "群组", state.groups.length)}
-          ${navButton("invites", "邀请", state.invites.length + state.outgoingInvites.length)}
+          ${navButton("invites", "邀请", pendingInviteCount())}
         </nav>
         <div class="rail-bottom">
           <button class="icon-button" data-action="drawer" data-drawer="profile">我</button>
@@ -1255,12 +1404,16 @@ function renderConversations() {
       <button class="text-button" data-action="refresh">刷新</button>
     </header>
     <div class="items">
-      ${state.conversations.map((item) => `
+      ${state.conversations.map((item) => {
+        const unread = conversationUnread(item);
+        return `
         <button class="item ${sameId(state.currentChat?.chat_id, item.chat_id) ? "active" : ""}" data-action="select-chat" data-chat="${html(item.chat_id)}">
           <span class="avatar small">${initials(item.title || item.chat_id)}</span>
           <span><strong>${html(item.title || item.chat_id)}</strong><em>${timeText(item.srv_ts) || "暂无新消息"}</em></span>
+          ${unread ? `<b class="unread-badge">${badgeCount(unread)}</b>` : ""}
         </button>
-      `).join("") || empty("还没有会话，先去通讯录找人或创建群聊")}
+      `;
+      }).join("") || empty("还没有会话，先去通讯录找人或创建群聊")}
     </div>
   `;
 }
@@ -1348,13 +1501,10 @@ function renderInvites() {
       ${state.invites.map((item) => `
         <article class="item invite">
           <span class="avatar small">${initials(item.initiator_info?.nickname || displayUserName(item.initiator_uid, "申请"))}</span>
-          <span><strong>${html(inviteTitle(item))}</strong><em>${html(item.invitation_msg || "等待处理")}</em></span>
-          <span class="actions">
-            <button data-action="handle-invite" data-result="1" data-invite="${item.invite_id}">同意</button>
-            <button class="ghost" data-action="handle-invite" data-result="2" data-invite="${item.invite_id}">拒绝</button>
-          </span>
+          <span><strong>${html(inviteTitle(item))}</strong><em>${html(item.invitation_msg || inviteStateText(item))}</em></span>
+          ${renderInviteActions(item)}
         </article>
-      `).join("") || empty("暂无待处理邀请")}
+      `).join("") || empty("暂无邀请")}
       <h3 class="list-title">我发出的申请</h3>
       ${state.outgoingInvites.map((item) => `
         <article class="item invite">
@@ -1364,6 +1514,28 @@ function renderInvites() {
       `).join("") || empty("暂无发出的申请")}
     </div>
   `;
+}
+
+function renderInviteActions(item: Invite) {
+  if (!isInvitePending(item)) {
+    return `<span class="status-pill ${item.handle_result === 1 ? "success" : "muted"}">${html(inviteStateText(item))}</span>`;
+  }
+  return `
+    <span class="actions">
+      <button data-action="handle-invite" data-result="1" data-invite="${html(item.invite_id)}">同意</button>
+      <button class="ghost" data-action="handle-invite" data-result="2" data-invite="${html(item.invite_id)}">拒绝</button>
+    </span>
+  `;
+}
+
+function inviteStateText(item: Invite) {
+  if (item.handle_result === 1) return "已同意";
+  if (item.handle_result === 2) return "已拒绝";
+  return "等待处理";
+}
+
+function pendingInviteCount() {
+  return [...state.invites, ...state.outgoingInvites].filter(isInvitePending).length;
 }
 
 function inviteTitle(item: Invite) {

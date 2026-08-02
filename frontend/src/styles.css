@@ -359,7 +359,7 @@ label {
   cursor: default;
 }
 
-.item span:not(.avatar):not(.actions) {
+.item span:not(.avatar):not(.actions):not(.status-pill) {
   display: grid;
   gap: 3px;
   min-width: 0;
@@ -383,6 +383,33 @@ label {
 .actions {
   display: flex;
   gap: 8px;
+}
+
+.unread-badge,
+.status-pill {
+  justify-self: end;
+  min-width: 22px;
+  border-radius: 999px;
+  padding: 2px 7px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 18px;
+}
+
+.unread-badge {
+  color: #fff;
+  background: #d04b3f;
+}
+
+.status-pill {
+  color: #52616b;
+  background: #e7edf2;
+}
+
+.status-pill.success {
+  color: #fff;
+  background: #19747a;
 }
 
 .chat-pane {
