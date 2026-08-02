@@ -2,6 +2,7 @@ package config
 
 import (
 	"flag"
+	"github.com/spf13/cast"
 	"lark/pkg/common/xlog"
 	"lark/pkg/common/xsnowflake"
 	"lark/pkg/conf"

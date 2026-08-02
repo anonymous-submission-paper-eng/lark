@@ -5,6 +5,7 @@ import (
 	"io"
 	"lark/pkg/utils"
 	"os"
+	"path/filepath"
 	"sync"
 )
 
@@ -55,6 +56,10 @@ func CropAvatar(in io.Reader, path string) (photos *Photos) {
 		i         int
 	)
 
+	if photos.Error = os.MkdirAll(path, 0776); photos.Error != nil {
+		return
+	}
+
 	origin, format, photos.Error = image.Decode(in)
 	if photos.Error != nil {
 		return
@@ -87,7 +92,7 @@ func cropPhoto(wg *sync.WaitGroup, origin image.Image, fm string, photo chan *Ph
 		file *os.File
 	)
 	pi.Name = pi.Key + "." + fm
-	pi.Path = path + pi.Name
+	pi.Path = filepath.Join(path, pi.Name)
 
 	defer func() {
 		wg.Done()

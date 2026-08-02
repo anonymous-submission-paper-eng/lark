@@ -206,11 +206,12 @@ function clearToken() {
 }
 
 async function api<T>(path: string, options: RequestInit = {}): Promise<ApiResp<T>> {
+  const hasJsonBody = !!options.body && !(options.body instanceof FormData);
   const response = await fetch(path, {
     credentials: "include",
     ...options,
     headers: {
-      ...(options.body ? { "Content-Type": "application/json" } : {}),
+      ...(hasJsonBody ? { "Content-Type": "application/json" } : {}),
       ...(options.headers || {})
     }
   });
@@ -523,6 +524,37 @@ async function ensureUsersByIds(ids: Array<Id | undefined | null>) {
 
 function userById(uid?: Id | null) {
   return state.usersById[idText(uid)];
+}
+
+function normalizeAvatarUrl(value: unknown) {
+  if (!value) return "";
+  if (typeof value === "string") return normalizeStorageUrl(value);
+  if (typeof value === "object") {
+    const avatar = value as { avatar_small?: string; avatar_medium?: string; avatar_large?: string };
+    return normalizeStorageUrl(avatar.avatar_small || avatar.avatar_medium || avatar.avatar_large || "");
+  }
+  return "";
+}
+
+function userAvatarUrl(uid?: Id | null) {
+  const contact = state.contacts.find((item) => sameId(item.uid, uid));
+  const user = userById(uid);
+  return contact?.member_avatar || normalizeAvatarUrl(user?.avatar);
+}
+
+function currentUserAvatarUrl() {
+  return normalizeAvatarUrl(state.user?.avatar);
+}
+
+function renderAvatar(label?: string | number | Id, url = "", size = "") {
+  const classes = ["avatar", size].filter(Boolean).join(" ");
+  const text = initials(label);
+  return `
+    <span class="${classes}">
+      ${url ? `<img src="${html(url)}" alt="" onerror="this.remove()" />` : ""}
+      <span>${html(text)}</span>
+    </span>
+  `;
 }
 
 function displayUserName(uid?: Id | null, fallback = "好友") {
@@ -1030,6 +1062,24 @@ async function updateProfile() {
   await loadMe();
 }
 
+async function uploadAvatar() {
+  const input = document.querySelector<HTMLInputElement>("#avatarUpload");
+  const file = input?.files?.[0];
+  if (!file) return setError("请选择头像图片");
+  const form = new FormData();
+  form.set("owner_type", "1");
+  form.set("photo", file);
+  const res = await api<{ avatar_small?: string; avatar_medium?: string; avatar_large?: string }>("/api/upload/avatar", {
+    method: "POST",
+    body: form
+  });
+  if (res.code !== 0) return setError(res.msg || "头像上传失败");
+  state.user = { ...(state.user || {}), avatar: res.data || state.user?.avatar };
+  saveJson(storageKeys.user, state.user);
+  setNotice("头像已更新");
+  await Promise.all([loadMe(), loadContacts(), loadConversations()]);
+}
+
 async function reportLocation() {
   const res = await api("/api/lbs/report_lng_lat", {
     method: "POST",
@@ -1354,7 +1404,7 @@ function renderApp() {
     <main class="im-shell ${state.drawer ? "has-drawer" : ""}">
       <aside class="rail">
         <div class="brand">
-          <div class="avatar">${initials(state.user?.nickname || state.user?.uid)}</div>
+          ${renderAvatar(state.user?.nickname || state.user?.uid, currentUserAvatarUrl())}
           <strong>Lark</strong>
         </div>
         <nav>
@@ -1408,7 +1458,7 @@ function renderConversations() {
         const unread = conversationUnread(item);
         return `
         <button class="item ${sameId(state.currentChat?.chat_id, item.chat_id) ? "active" : ""}" data-action="select-chat" data-chat="${html(item.chat_id)}">
-          <span class="avatar small">${initials(item.title || item.chat_id)}</span>
+          ${renderAvatar(item.title || item.chat_id, item.avatar, "small")}
           <span><strong>${html(item.title || item.chat_id)}</strong><em>${timeText(item.srv_ts) || "暂无新消息"}</em></span>
           ${unread ? `<b class="unread-badge">${badgeCount(unread)}</b>` : ""}
         </button>
@@ -1433,7 +1483,7 @@ function renderContacts() {
     <div class="items">
       ${state.contacts.map((item) => `
         <article class="item static">
-          <span class="avatar small">${initials(displayUserName(item.uid, item.alias || item.remark || "好友"))}</span>
+          ${renderAvatar(displayUserName(item.uid, item.alias || item.remark || "好友"), item.member_avatar || userAvatarUrl(item.uid), "small")}
           <span><strong>${html(displayUserName(item.uid, item.alias || item.remark || "好友"))}</strong><em>${html(displayUserSubtitle(item.uid))}</em></span>
           <button class="text-button" data-action="open-contact" data-uid="${html(item.uid)}">发消息</button>
         </article>
@@ -1445,14 +1495,14 @@ function renderContacts() {
 function renderUserResults() {
   const found = state.userResults.map((item) => `
     <article class="item static compact">
-      <span class="avatar small">${initials(item.nickname || item.uid)}</span>
+      ${renderAvatar(item.nickname || item.uid, normalizeAvatarUrl(item.avatar), "small")}
       <span><strong>${html(item.nickname || item.lark_id || "Lark 用户")}</strong><em>${html(item.lark_id ? `Lark ID ${item.lark_id}` : "可发送好友申请")}</em></span>
       <button data-action="invite-found-user" data-uid="${html(item.uid)}">添加</button>
     </article>
   `).join("");
   const users = state.userList.map((item) => `
     <article class="item static compact">
-      <span class="avatar small">${initials(item.nickname || item.uid)}</span>
+      ${renderAvatar(item.nickname || item.uid, normalizeAvatarUrl(item.avatar), "small")}
       <span><strong>${html(item.nickname || item.lark_id || item.uid)}</strong><em>${html(item.firstname || "")} ${html(item.lastname || "")}</em></span>
     </article>
   `).join("");
@@ -1475,7 +1525,7 @@ function renderGroups() {
     <div class="items">
       ${state.groups.map((item) => `
         <button class="item" data-action="open-group" data-chat="${html(item.chat_id)}">
-          <span class="avatar small">${initials(item.chat_name || item.chat_id)}</span>
+          ${renderAvatar(item.chat_name || item.chat_id, item.chat_avatar, "small")}
           <span><strong>${html(item.chat_name || item.remark || "群聊")}</strong><em>群成员邀请通过后加入</em></span>
         </button>
       `).join("") || empty("暂无群聊")}
@@ -1500,7 +1550,7 @@ function renderInvites() {
       <h3 class="list-title">收到的申请</h3>
       ${state.invites.map((item) => `
         <article class="item invite">
-          <span class="avatar small">${initials(item.initiator_info?.nickname || displayUserName(item.initiator_uid, "申请"))}</span>
+          ${renderAvatar(item.initiator_info?.nickname || displayUserName(item.initiator_uid, "申请"), normalizeAvatarUrl(item.initiator_info?.avatar) || userAvatarUrl(item.initiator_uid), "small")}
           <span><strong>${html(inviteTitle(item))}</strong><em>${html(item.invitation_msg || inviteStateText(item))}</em></span>
           ${renderInviteActions(item)}
         </article>
@@ -1508,7 +1558,7 @@ function renderInvites() {
       <h3 class="list-title">我发出的申请</h3>
       ${state.outgoingInvites.map((item) => `
         <article class="item invite">
-          <span class="avatar small">${item.chat_type === 2 ? "群" : "友"}</span>
+          ${renderAvatar(item.chat_type === 2 ? "群" : "友", userAvatarUrl(item.invitee_uid), "small")}
           <span><strong>${html(inviteStatus(item))}</strong><em>${html(item.invitation_msg || "")}</em></span>
         </article>
       `).join("") || empty("暂无发出的申请")}
@@ -1587,17 +1637,91 @@ function renderChat() {
 }
 
 function renderMessage(item: ChatMessage) {
+  const systemText = systemMessageText(item);
+  if (systemText) {
+    return `<article class="system-message"><span>${html(systemText)}</span></article>`;
+  }
   const mine = sameId(item.sender_id, state.user?.uid);
   const senderName = item.sender_name || item.alias || displayUserName(item.sender_id, "未知用户");
+  const avatarUrl = item.member_avatar || userAvatarUrl(item.sender_id);
   return `
     <article class="message ${mine ? "mine" : ""}">
-      <div class="avatar tiny">${initials(senderName)}</div>
+      ${renderAvatar(senderName, avatarUrl, "tiny")}
       <div class="bubble">
         <span>${html(senderName)} · ${timeText(item.srv_ts || item.sent_ts)}</span>
-        <p>${html(item.body || "")}</p>
+        ${messageBodyHtml(item)}
       </div>
     </article>
   `;
+}
+
+function messageBodyHtml(item: ChatMessage) {
+  const imageUrl = imageMessageUrl(item);
+  if (imageUrl) return `<img class="message-image" src="${html(imageUrl)}" alt="聊天图片" />`;
+  return `<p>${html(item.body || "")}</p>`;
+}
+
+function imageMessageUrl(item: ChatMessage) {
+  if (item.msg_type !== 3 || !item.body) return "";
+  const parsed = parseJsonObject(item.body);
+  return normalizeImageUrl(parsed?.image_key || parsed?.url || parsed?.origin || parsed?.large || parsed?.medium || parsed?.small || item.body);
+}
+
+function normalizeImageUrl(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) return "";
+  return normalizeStorageUrl(value);
+}
+
+function normalizeStorageUrl(value: string) {
+  const text = value.trim();
+  if (!text) return "";
+  try {
+    const url = new URL(text);
+    if (url.pathname.startsWith("/photos/")) return url.pathname;
+    return text;
+  } catch {
+    // Keep handling relative object keys below.
+  }
+  if (text.startsWith("/photos/")) return text;
+  if (text.startsWith("/")) return text;
+  if (/\.(png|jpe?g|gif|webp|avif)$/i.test(text)) return `/photos/${encodeURIComponent(text)}`;
+  return "";
+}
+
+function systemMessageText(item: ChatMessage) {
+  const joined = parseJoinedGroupMessage(item);
+  if (joined) {
+    const inviter = joined.inviter?.alias || displayUserName(joined.inviter?.uid, "有人");
+    const invitee = joined.invitee?.alias || displayUserName(joined.invitee?.uid, "新成员");
+    return `${inviter} 邀请 ${invitee} 加入群聊`;
+  }
+  if (item.msg_type === 12) return item.body || "已同意好友申请";
+  if (item.msg_type === 14) return item.body || "有成员退出了群聊";
+  if (item.msg_type === 15) return item.body || "有成员被移出群聊";
+  return "";
+}
+
+function parseJoinedGroupMessage(item: ChatMessage) {
+  if (item.msg_type !== 13 && !looksLikeJoinedGroupBody(item.body)) return null;
+  const parsed = parseJsonObject(item.body || "");
+  if (!parsed?.inviter || !parsed?.invitee) return null;
+  return parsed as {
+    inviter?: { uid?: Id; alias?: string; member_avatar?: string };
+    invitee?: { uid?: Id; alias?: string; member_avatar?: string };
+  };
+}
+
+function looksLikeJoinedGroupBody(body?: string) {
+  return !!body && body.includes("\"inviter\"") && body.includes("\"invitee\"");
+}
+
+function parseJsonObject(text: string) {
+  try {
+    const value = parseApiJson<any>(text);
+    return value && typeof value === "object" ? value : null;
+  } catch {
+    return null;
+  }
 }
 
 function renderDrawer() {
@@ -1628,6 +1752,15 @@ function renderDrawer() {
 function renderProfilePanel() {
   return `
     <section class="panel">
+      <div class="profile-avatar">
+        ${renderAvatar(state.user?.nickname || state.user?.uid, currentUserAvatarUrl())}
+        <div>
+          <strong>${html(state.user?.nickname || state.user?.lark_id || state.user?.uid || "我")}</strong>
+          <em>${html(state.user?.lark_id ? `Lark ID ${state.user.lark_id}` : "本地账号")}</em>
+        </div>
+      </div>
+      <label>头像<input id="avatarUpload" type="file" accept="image/*" /></label>
+      <button class="ghost" data-action="upload-avatar">上传头像</button>
       <input id="profileNickname" value="${html(state.user?.nickname || "")}" placeholder="昵称" />
       <button data-action="update-profile">保存资料</button>
       <p class="meta-line">${html(state.user?.lark_id ? `Lark ID ${state.user.lark_id}` : "本地账号")}</p>
@@ -1686,7 +1819,7 @@ function renderMembersPanel() {
       <div class="member-list">
         ${state.members.map((item) => `
           <article>
-            <span class="avatar small">${initials(displayUserName(item.uid, item.alias || "成员"))}</span>
+            ${renderAvatar(displayUserName(item.uid, item.alias || "成员"), item.member_avatar || userAvatarUrl(item.uid), "small")}
             <div><strong>${html(displayUserName(item.uid, item.alias || "成员"))}</strong><em>${html(roleText(item.role_id))}</em></div>
           </article>
         `).join("") || empty("还没有加载成员")}
@@ -1818,6 +1951,7 @@ function bindEvents() {
       if (action === "quit-group") await quitGroup();
       if (action === "handle-invite" && node.dataset.invite) await handleInvite(node.dataset.invite, Number(node.dataset.result) as 1 | 2);
       if (action === "update-profile") await updateProfile();
+      if (action === "upload-avatar") await uploadAvatar();
       if (action === "report-location") await reportLocation();
       if (action === "people-nearby") await peopleNearby();
       if (action === "give-red") await giveRedEnvelope();

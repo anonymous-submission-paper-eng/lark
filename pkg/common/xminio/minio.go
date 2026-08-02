@@ -17,6 +17,7 @@ http://docs.minio.org.cn/docs/master/golang-client-quickstart-guide
 import (
 	"context"
 	"github.com/minio/minio-go/v7/pkg/encrypt"
+	"github.com/spf13/cast"
 	"io"
 )
 
@@ -127,7 +128,14 @@ func NewMinioClient(conf *MinioConfig) {
 			xlog.Info("Successfully created", bucketName)
 		}
 	}
+	if err = client.SetBucketPolicy(ctx, BUCKET_PHOTOS, publicReadBucketPolicy(BUCKET_PHOTOS)); err != nil {
+		xlog.Error(err.Error())
+	}
 	return
+}
+
+func publicReadBucketPolicy(bucketName string) string {
+	return `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":["*"]},"Action":["s3:GetObject"],"Resource":["arn:aws:s3:::` + bucketName + `/*"]}]}`
 }
 
 func GetEndpoint() string {
