@@ -155,7 +155,7 @@ func (c *userCache) SetServerId(uid int64, serverId int64) (err error) {
 	var (
 		key = constant.RK_SYNC_USER_SERVER + utils.GetUserSlot(uid)
 	)
-	err = xredis.HSetNX(key, utils.Int64ToStr(uid), serverId)
+	err = xredis.HSet(key, map[string]interface{}{utils.Int64ToStr(uid): serverId})
 	if err != nil {
 		xlog.Warn(ERROR_CODE_CACHE_REDIS_SET_FAILED, ERROR_CACHE_REDIS_SET_FAILED, err.Error())
 	}
@@ -164,7 +164,7 @@ func (c *userCache) SetServerId(uid int64, serverId int64) (err error) {
 
 func (c *userCache) GetServerId(uid int64) (serverId string, err error) {
 	var (
-		key = constant.RK_SYNC_USER_SERVER + utils.GetChatSlot(uid)
+		key = constant.RK_SYNC_USER_SERVER + utils.GetUserSlot(uid)
 	)
 	serverId, err = xredis.HGet(key, utils.Int64ToStr(uid))
 	if err != nil {

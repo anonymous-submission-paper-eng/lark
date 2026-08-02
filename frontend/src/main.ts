@@ -126,6 +126,9 @@ const storageKeys = {
   currentChat: "lark.current_chat"
 };
 
+const WS_RECONNECT_BASE_MS = 1000;
+const WS_RECONNECT_MAX_MS = 8000;
+
 const state = {
   booted: false,
   busy: false,
@@ -152,6 +155,9 @@ const state = {
   notice: "",
   error: "",
   ws: null as WebSocket | null,
+  wsReconnectTimer: null as number | null,
+  wsReconnectAttempt: 0,
+  wsManualClose: false,
   loginMode: "signin" as "signin" | "signup"
 };
 
@@ -986,6 +992,8 @@ async function openDrawer(drawer: Drawer) {
 function connectWs() {
   if (!token()) return;
   if (state.ws && state.ws.readyState <= WebSocket.OPEN) return;
+  clearWsReconnectTimer();
+  state.wsManualClose = false;
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
   const ws = new WebSocket(`${protocol}//${location.host}/socket`);
   ws.binaryType = "arraybuffer";
@@ -993,15 +1001,18 @@ function connectWs() {
   state.pushStatus = "正在连接推送";
   render();
   ws.addEventListener("open", () => {
+    state.wsReconnectAttempt = 0;
     state.pushStatus = "推送已连接";
     state.notice = "推送通道已建立";
     render();
   });
   ws.addEventListener("message", (event) => handlePush(event.data));
-  ws.addEventListener("close", () => {
+  ws.addEventListener("close", (event) => {
     state.ws = null;
-    state.pushStatus = "推送已断开";
+    const shouldReconnect = !!token() && !state.wsManualClose && !event.wasClean;
+    state.pushStatus = shouldReconnect ? "推送断开，正在重连" : "推送已断开";
     render();
+    if (shouldReconnect) scheduleWsReconnect();
   });
   ws.addEventListener("error", () => {
     state.pushStatus = "推送连接异常";
@@ -1010,9 +1021,27 @@ function connectWs() {
 }
 
 function closeWs() {
+  state.wsManualClose = true;
+  clearWsReconnectTimer();
   if (state.ws && state.ws.readyState <= WebSocket.OPEN) state.ws.close();
   state.ws = null;
   state.pushStatus = "未连接";
+}
+
+function scheduleWsReconnect() {
+  if (!token() || state.wsManualClose || state.wsReconnectTimer !== null) return;
+  const delay = Math.min(WS_RECONNECT_BASE_MS * 2 ** state.wsReconnectAttempt, WS_RECONNECT_MAX_MS);
+  state.wsReconnectAttempt += 1;
+  state.wsReconnectTimer = window.setTimeout(() => {
+    state.wsReconnectTimer = null;
+    connectWs();
+  }, delay);
+}
+
+function clearWsReconnectTimer() {
+  if (state.wsReconnectTimer === null) return;
+  window.clearTimeout(state.wsReconnectTimer);
+  state.wsReconnectTimer = null;
 }
 
 async function handlePush(data: unknown) {

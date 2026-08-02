@@ -20,6 +20,7 @@ type Client struct {
 	onlineTs  int64 // 上线时间戳（毫秒）
 	sendChan  chan []byte
 	closeChan chan struct{}
+	closeOnce sync.Once
 	closed    bool
 }
 
@@ -75,7 +76,7 @@ func (c *Client) debug() {
 }
 
 func (c *Client) closeConn() {
-	sync.OnceFunc(func() {
+	c.closeOnce.Do(func() {
 		c.closed = true
 		close(c.closeChan)
 		c.hub.unregisterChan <- c

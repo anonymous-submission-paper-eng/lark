@@ -59,7 +59,7 @@ func (b *online) UserOnline(uid int64, serverId int64, platform pb_enum.PLATFORM
 		return
 	}
 	// 4、更新serverId缓存
-	err = b.userCache.SetServerId(uid, serverId)
+	err = b.userCache.SetServerId(uid, srvId)
 	if err != nil {
 		xlog.Errorf("user online set serverid failed. err:%v, uid:%d, serverId:%d", err.Error(), uid, srvId)
 		err = nil

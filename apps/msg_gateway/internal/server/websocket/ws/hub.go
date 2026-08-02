@@ -7,8 +7,12 @@ import (
 	"lark/pkg/proto/pb_msg"
 	"lark/pkg/utils"
 	"log"
+	"net"
+	"net/http"
+	"net/url"
 	"runtime/debug"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -30,6 +34,7 @@ func NewHub(serverId int, msgCallback MessageCallback) *Hub {
 			ReadBufferSize:    WS_READ_BUFFER_SIZE,
 			WriteBufferSize:   WS_WRITE_BUFFER_SIZE,
 			EnableCompression: false, //关闭压缩
+			CheckOrigin:       checkOrigin,
 		},
 		registerChan:   make(chan *Client, WS_CHAN_CLIENT_REGISTER_SIZE),
 		unregisterChan: make(chan *Client, WS_CHAN_CLIENT_UNREGISTER_SIZE),
@@ -38,6 +43,30 @@ func NewHub(serverId int, msgCallback MessageCallback) *Hub {
 		clients:        NewCliMap(),
 		now:            time.Now(),
 	}
+}
+
+func checkOrigin(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true
+	}
+	u, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	originHost := strings.ToLower(u.Hostname())
+	requestHost := strings.ToLower(hostWithoutPort(r.Host))
+	if originHost == requestHost {
+		return true
+	}
+	return originHost == "localhost" || originHost == "127.0.0.1" || originHost == "::1"
+}
+
+func hostWithoutPort(host string) string {
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		return h
+	}
+	return host
 }
 
 func (h *Hub) registerClient(client *Client) {
